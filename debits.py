@@ -886,6 +886,8 @@ def run() -> None:
     append_csv(RELEVES, RELEVES_COLS, releve_rows(new_hours, flows, temp, rain_s, rain_m, states, last_ts))
     state["last_row"] = last_ts.isoformat()
     update_history()
+    rel = read_csv(RELEVES)
+    write_csv(DATA / "releves_10j.csv", RELEVES_COLS, rel[-240:])  # extrait léger pour le guide de pêche
 
     if notes:
         hist = read_history()
