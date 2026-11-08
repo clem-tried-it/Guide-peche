@@ -43,7 +43,8 @@ jobs:
         run: |
           git config user.name "guide-peche-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data state.json 2>/dev/null || true
+          git add -A data
+          if [ -f state.json ]; then git add state.json; fi
           if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
           git commit -m "Relevé $(date -u +%Y-%m-%dT%H:%MZ)"
           for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
