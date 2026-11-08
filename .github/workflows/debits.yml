@@ -1,0 +1,49 @@
+name: Guide pêche – débits Sambre-Meuse
+
+on:
+  schedule:
+    - cron: "20 * * * *"   # chaque heure à la minute 20 (UTC)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run = relevé, test = notification [TEST], bootstrap = reconstruire l'historique"
+        type: choice
+        options: [run, test, bootstrap]
+        default: run
+      station:
+        description: "Pour le test : Chooz ou Landelies"
+        type: choice
+        options: [Chooz, Landelies]
+        default: Chooz
+
+permissions:
+  contents: write
+
+concurrency:
+  group: guide-peche-debits
+  cancel-in-progress: false
+
+jobs:
+  releve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Relevé
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python debits.py "${{ inputs.mode || 'run' }}" "${{ inputs.station || 'Chooz' }}"
+      - name: Enregistrer les données
+        if: ${{ (inputs.mode || 'run') != 'test' }}
+        run: |
+          git config user.name "guide-peche-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data state.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
+          git commit -m "Relevé $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done

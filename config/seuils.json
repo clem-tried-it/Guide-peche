@@ -1,0 +1,7 @@
+{
+  "_aide": "Règles d'alerte modifiables. smooth = lissage (h), window = fenêtre (h), pct = hausse minimale (%), abs = hausse minimale (m³/s), pause = délai entre deux crues (h), baisse = décrue à -X % du pic.",
+  "stations": {
+    "Landelies": {"smooth": 3, "window": 3, "pct": 100, "abs": 5, "pause": 24, "baisse": 30},
+    "Chooz": {"smooth": 1, "window": 6, "pct": 50, "abs": 20, "pause": 24, "baisse": 30}
+  }
+}
