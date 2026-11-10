@@ -1,20 +1,20 @@
-# Test des débits amont (Hub'Eau) — 10/11/2026 09:02 UTC
+# Test des débits amont (Hub'Eau) — 10/11/2026 09:30 UTC
 
 ## Disponibilité des données
 
 | Aval | Station amont | code | jours (QmnJ) | de | à | médiane m³/s | heures temps réel (31 j) |
 |---|---|---|---|---|---|---|---|
-| Chooz | Montherme | B700001002 | 692 | 2022-01-05 | 2026-11-09 | 524.4 | 0 |
+| Chooz | Montherme | B700001002 | 692 | 2022-01-05 | 2026-11-09 | 524.4 | 24 |
 | Chooz | Aiglemont | B560010101 | 985 | 2021-12-10 | 2026-11-09 | 217.6 | 0 |
 | Chooz | Charleville | B540001001 | 0 | - | - | - | 0 |
-| Chooz | Sedan | B502001001 | 1835 | 2021-11-01 | 2026-11-09 | 54.7 | 0 |
-| Chooz | Stenay | B315002001 | 1835 | 2021-11-01 | 2026-11-09 | 28.9 | 0 |
-| Landelies | Marpent | D019223001 | 1835 | 2021-11-01 | 2026-11-09 | 5.1 | 0 |
+| Chooz | Sedan | B502001001 | 1835 | 2021-11-01 | 2026-11-09 | 54.7 | 364 |
+| Chooz | Stenay | B315002001 | 1835 | 2021-11-01 | 2026-11-09 | 28.9 | 716 |
+| Landelies | Marpent | D019223001 | 1835 | 2021-11-01 | 2026-11-09 | 5.1 | 716 |
 | Landelies | Maubeuge | D019801101 | 0 | - | - | - | 0 |
 | Landelies | Berlaimont | D016221001 | 1835 | 2021-11-01 | 2026-11-09 | 38.8 | 0 |
-| Landelies | HelpeMaj_Taisnieres | D015652001 | 1835 | 2021-11-01 | 2026-11-09 | 1.5 | 0 |
-| Landelies | HelpeMin_Maroilles | D013702001 | 1835 | 2021-11-01 | 2026-11-09 | 1.7 | 0 |
-| Landelies | Solre_Ferriere | D020601001 | 1835 | 2021-11-01 | 2026-11-09 | 0.6 | 0 |
+| Landelies | HelpeMaj_Taisnieres | D015652001 | 1835 | 2021-11-01 | 2026-11-09 | 1.5 | 716 |
+| Landelies | HelpeMin_Maroilles | D013702001 | 1835 | 2021-11-01 | 2026-11-09 | 1.7 | 486 |
+| Landelies | Solre_Ferriere | D020601001 | 1835 | 2021-11-01 | 2026-11-09 | 0.6 | 680 |
 
 ## Backtest journalier
 
@@ -49,19 +49,8 @@ Même modèle statistique direct par horizon, avec et sans les variations de dé
 
 | Station amont | heures de données | dernier relevé (UTC) | meilleur décalage (h) | corrélation | rapport médian aval/amont |
 |---|---|---|---|---|---|
-| Montherme | 0 | - | n/d | n/d | n/d |
+| Montherme | 24 | 2026-10-23 08:00:00+00:00 | n/d | n/d | n/d |
 | Aiglemont | 0 | - | n/d | n/d | n/d |
 | Charleville | 0 | - | n/d | n/d | n/d |
-| Sedan | 0 | - | n/d | n/d | n/d |
-| Stenay | 0 | - | n/d | n/d | n/d |
-
-### Landelies — avance horaire de l'amont (30 derniers jours)
-
-| Station amont | heures de données | dernier relevé (UTC) | meilleur décalage (h) | corrélation | rapport médian aval/amont |
-|---|---|---|---|---|---|
-| Marpent | 0 | - | n/d | n/d | n/d |
-| Maubeuge | 0 | - | n/d | n/d | n/d |
-| Berlaimont | 0 | - | n/d | n/d | n/d |
-| HelpeMaj_Taisnieres | 0 | - | n/d | n/d | n/d |
-| HelpeMin_Maroilles | 0 | - | n/d | n/d | n/d |
-| Solre_Ferriere | 0 | - | n/d | n/d | n/d |
+| Sedan | 364 | 10/11 09:00 | 1 | 0.47 | 1.39 |
+| Stenay | 716 | 10/11 09:00 | 0 | 0.41 | 6.07 |
