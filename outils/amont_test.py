@@ -61,8 +61,7 @@ def journalier(code):
 
 
 def temps_reel(code):
-    rows = hub("observations_tr", code_entite=code, grandeur_hydro="Q", timestep=60,
-               date_debut_obs=(pd.Timestamp.utcnow() - pd.Timedelta(days=31)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    rows = hub("observations_tr", code_entite=code, grandeur_hydro="Q", fields="date_obs,resultat_obs")
     if not rows:
         return pd.Series(dtype=float)
     df = pd.DataFrame(rows)
@@ -193,7 +192,7 @@ def main():
         ups = {n: s for (a, n), s in jour.items() if a == st and len(s) > 900}
         out[st] = {f"{k[0]}|{k[1]}": v for k, v in backtest(st, hist, ups).items()}
     say("\n## Avance horaire\n")
-    for st in AMONT:
+    for st in ("Chooz",):
         decalage(st, rel, {n: s for (a, n), s in heure.items() if a == st})
     (OUT / "resultat.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     (OUT / "resultat.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
