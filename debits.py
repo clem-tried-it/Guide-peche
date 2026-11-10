@@ -6,6 +6,7 @@ Usage :
     python debits.py run              relevé normal (lancé chaque heure par GitHub Actions)
     python debits.py test Chooz       notification [TEST] avec les graphiques (Chooz ou Landelies)
     python debits.py bootstrap        reconstruit l'historique journalier (5 ans) et 60 jours de relevés
+    python debits.py bilan            compare les estimations émises avec les alertes au débit réellement observé
 """
 import csv
 import json
@@ -52,6 +53,9 @@ RELEVES_COLS = ["Date", "Landelies", "Chatelet", "Salzinnes", "Chooz", "Profonde
                 "Pluie_Sambre", "Pluie_Meuse", "Etat_Landelies", "Etat_Chooz"]
 HIST_COLS = ["Date", "Landelies", "Chatelet", "Salzinnes", "Chooz", "Profondeville", "PluieS", "PluieM"]
 ALERT_COLS = ["Date", "Station", "Type", "Debit", "Message"]
+PREVISIONS = DATA / "previsions.csv"
+VERIFICATION = DATA / "verification.md"
+PREV_COLS = ["Alerte", "Station", "Type", "Q0", "Horizon", "Date_cible", "Estime", "Bas", "Haut", "Observe", "Erreur_pct"]
 
 
 class _Log:
@@ -430,10 +434,10 @@ def make_chart(station: str, flows: dict, rain_series: list, hist, forecast: dic
     tw = [a2]
     if len(h_old):
         doy = h_old.index.dayofyear
-        band = np.array([h_old[abs(((doy - t.dayofyear) + 182) % 365 - 182) <= 7].quantile([.25, .5, .75]).values
+        norm = np.array([h_old[abs(((doy - t.dayofyear) + 182) % 365 - 182) <= 7].quantile([.25, .5, .75]).values
                          for t in rng])
-        a2.fill_between(rng, band[:, 0], band[:, 2], color="#bbbbbb", alpha=.5, label="Normale de saison (25–75 %)")
-        a2.plot(rng, band[:, 1], color="#888888", lw=1)
+        a2.fill_between(rng, norm[:, 0], norm[:, 2], color="#bbbbbb", alpha=.5, label="Normale de saison (25–75 %)")
+        a2.plot(rng, norm[:, 1], color="#888888", lw=1)
         hd = s_full.resample("1D").mean()
         q0 = float(hd.iloc[-1]) if len(hd) else None
         rise = h_old / h_old.shift(1) - 1
@@ -517,7 +521,49 @@ def make_chart(station: str, flows: dict, rain_series: list, hist, forecast: dic
     buf = io.BytesIO()
     fig.savefig(buf, format="png")
     plt.close(fig)
-    return buf.getvalue(), bold[1] if len(bold) > 1 else bold[0]
+    prev = {"d0": d0, "q0": float(obs.iloc[-1]) if len(obs) else None, "est": list(est) if est else [],
+            "bas": list(band[0]) if band is not None else [], "haut": list(band[1]) if band is not None else []}
+    return buf.getvalue(), bold[1] if len(bold) > 1 else bold[0], prev
+
+
+def phase_of(station: str, s_full, p25=None, p90=None) -> str:
+    """Phase de la rivière. Elle part de la même règle que l'alerte crue : un « début de montée » est une montée
+    détectée par cette règle depuis 12 h au plus et qui continue. Sans montée détectée (crue lente), on compare
+    les moyennes sur 24 h, ce qui efface les à-coups des barrages."""
+    rule = read_rules().get(station, DEFAULT_RULES.get(station, DEFAULT_RULES["Chooz"]))
+    cur, t_end = float(s_full.iloc[-1]), s_full.index[-1]
+    last72 = s_full[s_full.index >= t_end - timedelta(hours=72)]
+    ref3 = s_full[s_full.index <= t_end - timedelta(hours=3)]
+    monte = len(ref3) > 0 and cur > 1.03 * float(ref3.iloc[-1])
+    moves = detect_moves(smooth(list(zip(last72.index, last72.values)), rule["smooth"]), rule)
+    if moves:
+        c = moves[-1]
+        apres = last72[last72.index >= c["t"]]
+        pk, t_pk, age = float(apres.max()), apres.idxmax(), t_end - c["t"]
+        if age <= timedelta(hours=12) and cur >= 0.85 * pk and (monte or age <= timedelta(hours=3)):
+            return "début de montée"
+        if cur >= 0.97 * pk and monte:
+            return "montée prolongée"
+        if cur >= 0.9 * pk:
+            return "autour du pic"
+        if cur > 1.1 * c["ref"] and t_end - t_pk <= timedelta(hours=48):
+            return "début de décrue"
+    else:
+        def moy(h0, h1):
+            w = s_full[(s_full.index > t_end - timedelta(hours=h1)) & (s_full.index <= t_end - timedelta(hours=h0))]
+            return float(w.mean()) if len(w) >= 12 else None
+        a, b, c3 = moy(0, 24), moy(24, 48), moy(48, 72)
+        if a and b:
+            d = rule["abs"] / 2
+            if a > 1.15 * b and a - b >= d:
+                return "début de montée" if c3 and b <= 1.1 * c3 else "montée prolongée"
+            if a < 0.87 * b and b - a >= d and c3 and b >= 1.1 * c3:
+                return "début de décrue"
+    if p25 is not None and cur < p25:
+        return "étiage stable"
+    if p90 is not None and cur > p90:
+        return "hautes eaux stables"
+    return "débit stable, dans la normale"
 
 
 def estimation(station: str, s_full, h, forecast: dict, d0, hist=None, est=None, last_obs=None):
@@ -533,32 +579,8 @@ def estimation(station: str, s_full, h, forecast: dict, d0, hist=None, est=None,
         p25, p50, p75, p90 = (float(m.quantile(q)) for q in (.25, .5, .75, .9))
         niveau = ("sous la normale de saison" if cur < p25 else "au-dessus de la normale de saison" if cur > p75
                   else "dans la normale de saison")
-    # Phase de la rivière sur les 72 dernières heures
-    last72 = s_full[s_full.index >= s_full.index[-1] - timedelta(hours=72)]
-    mn, pk = float(last72.min()), float(last72.max())
-    t_pk = last72.idxmax()
     min_d = DEFAULT_RULES.get(station, {"abs": 6})["abs"] / 2
-    prev_v = float(prev.iloc[-1]) if len(prev) else cur
-    rising = trend > 10 and cur - prev_v >= min_d
-    episode = pk >= 1.3 * mn and pk - mn >= min_d
-    rise_start = None
-    if rising:
-        above = last72[last72 > mn * 1.2]
-        rise_start = above.index[0] if len(above) else None
-    if rising and rise_start is not None and (s_full.index[-1] - rise_start) <= timedelta(hours=12):
-        phase = "début de montée"
-    elif rising:
-        phase = "montée prolongée"
-    elif episode and cur >= 0.9 * pk:
-        phase = "autour du pic"
-    elif episode and cur < 0.9 * pk and cur >= mn * 1.1 and s_full.index[-1] > t_pk:
-        phase = "début de décrue"
-    elif p25 is not None and cur < p25:
-        phase = "étiage stable"
-    elif p90 is not None and cur > p90:
-        phase = "hautes eaux stables"
-    else:
-        phase = "débit stable, dans la normale"
+    phase = phase_of(station, s_full, p25, p90)
     bold = []
     if est:
         import pandas as pd
@@ -753,19 +775,113 @@ def ensemble_rain(station: str) -> list[list[float]]:
 # ---------- Relevé, alertes, journal ----------
 
 def send_alert(station: str, titre: str, txt: str, tag: str, flows: dict, rain_series: list,
-               alert_t: datetime, hist) -> None:
-    """Envoie l'alerte avec graphiques ; repli sur un texte seul si le graphique échoue."""
+               alert_t: datetime, hist, journal: str = "") -> None:
+    """Envoie l'alerte avec graphiques ; repli sur un texte seul si le graphique échoue.
+    Si `journal` vaut « crue » ou « décrue », l'estimation est notée dans previsions.csv pour être vérifiée plus tard."""
     try:
         try:
             fc = rain_forecast(station)
         except Exception as e:
             logger.warning("Prévision de pluie indisponible", error=str(e))
             fc = {}
-        png, _ = make_chart(station, flows, rain_series, hist, fc, alert_t)
+        png, _, prev = make_chart(station, flows, rain_series, hist, fc, alert_t)
+        if journal:
+            try:
+                log_forecast(station, journal, alert_t, prev)
+            except Exception as e:
+                logger.warning("Estimation non journalisée", error=str(e))
         push_image(titre, txt, tag, png)
     except Exception as e:
         logger.warning("Graphique impossible, envoi du texte seul", error=str(e))
         push(titre, txt, tag)
+
+
+# ---------- Vérification : estimation faite à chaque alerte, comparée ensuite au débit réel ----------
+
+def log_forecast(station: str, typ: str, alert_t: datetime, prev: dict) -> None:
+    """Note l'estimation jour par jour (J+1 à J+14) émise avec une alerte."""
+    if not prev or not prev.get("est") or prev.get("q0") is None:
+        return
+    rows = []
+    for h, v in enumerate(prev["est"], start=1):
+        rows.append({"Alerte": local(alert_t), "Station": station, "Type": typ, "Q0": fmt(prev["q0"]), "Horizon": h,
+                     "Date_cible": (prev["d0"] + timedelta(days=h)).strftime("%Y-%m-%d"), "Estime": fmt(v),
+                     "Bas": fmt(prev["bas"][h - 1]) if len(prev["bas"]) >= h else "",
+                     "Haut": fmt(prev["haut"][h - 1]) if len(prev["haut"]) >= h else "", "Observe": "", "Erreur_pct": ""})
+    append_csv(PREVISIONS, PREV_COLS, rows)
+
+
+def verify_forecasts() -> bool:
+    """Complète previsions.csv avec le débit moyen réellement observé dès que le jour visé est terminé,
+    puis réécrit le bilan verification.md. Renvoie True si quelque chose a changé."""
+    rows = read_csv(PREVISIONS)
+    if not rows:
+        return False
+    today = datetime.now(TZ).strftime("%Y-%m-%d")
+    hist = {r["Date"]: r for r in read_csv(HISTORIQUE)}
+    changed = False
+    for r in rows:
+        if r["Observe"] or r["Date_cible"] >= today:
+            continue
+        obs = hist.get(r["Date_cible"], {}).get(r["Station"])
+        if obs in ("", None) or float(obs) <= 0:
+            continue
+        r["Observe"] = fmt(obs)
+        r["Erreur_pct"] = round((float(r["Estime"]) / float(obs) - 1) * 100, 1)
+        changed = True
+    if changed:
+        write_csv(PREVISIONS, PREV_COLS, rows)
+    if changed or not VERIFICATION.exists():
+        VERIFICATION.write_text(bilan_text(rows), encoding="utf-8")
+    return changed
+
+
+def bilan_text(rows: list[dict]) -> str:
+    """Bilan lisible : erreur médiane par horizon, comparée à « le débit ne bouge pas », et tenue de la fourchette."""
+    import statistics as st
+    done = [r for r in rows if r["Observe"] not in ("", None)]
+    alertes = sorted({(r["Alerte"], r["Station"], r["Type"]) for r in rows})
+    out = ["# Vérification des estimations émises avec les alertes", "",
+           f"Mis à jour le {datetime.now(TZ):%d/%m/%Y %H:%M}. {len(alertes)} alerte(s) journalisée(s), "
+           f"{len(done)} estimation(s) déjà comparée(s) au débit réel.", "",
+           "Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait "
+           "donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.", ""]
+    for station in sorted({r["Station"] for r in done}):
+        out += [f"## {RIVER.get(station, station)} ({station})", "",
+                "| Horizon | Cas | Erreur médiane modèle | Erreur médiane « débit constant » | Biais médian | Dans la fourchette |",
+                "|---|---|---|---|---|---|"]
+        for lab, lo, hi in (("J+1", 1, 1), ("J+2 à J+3", 2, 3), ("J+4 à J+7", 4, 7), ("J+8 à J+14", 8, 14)):
+            g = [r for r in done if r["Station"] == station and lo <= int(r["Horizon"]) <= hi]
+            if not g:
+                continue
+            err = [float(r["Erreur_pct"]) for r in g]
+            cst = [abs(float(r["Q0"]) / float(r["Observe"]) - 1) * 100 for r in g]
+            fb = [r for r in g if r["Bas"] not in ("", None) and r["Haut"] not in ("", None)]
+            dans = sum(float(r["Bas"]) <= float(r["Observe"]) <= float(r["Haut"]) for r in fb)
+            four = f"{dans}/{len(fb)}" if fb else "n/d"
+            out.append(f"| {lab} | {len(g)} | {st.median(abs(e) for e in err):.0f} % | {st.median(cst):.0f} % | "
+                       f"{st.median(err):+.0f} % | {four} |")
+        out.append("")
+    if done:
+        out += ["## Détail par alerte", "", "| Alerte | Station | Type | Débit au départ | J+1 | J+3 | J+7 |", "|---|---|---|---|---|---|---|"]
+        for al, station, typ in alertes:
+            g = {int(r["Horizon"]): r for r in rows if (r["Alerte"], r["Station"], r["Type"]) == (al, station, typ)}
+
+            def cell(h):
+                r = g.get(h)
+                if not r:
+                    return "–"
+                if r["Observe"] in ("", None):
+                    return f"estimé {float(r['Estime']):.0f}, à venir"
+                return f"estimé {float(r['Estime']):.0f}, réel {float(r['Observe']):.0f} ({float(r['Erreur_pct']):+.0f} %)"
+            q0 = next(iter(g.values()))["Q0"]
+            out.append(f"| {al} | {station} | {typ} | {float(q0):.0f} m³/s | {cell(1)} | {cell(3)} | {cell(7)} |")
+        out.append("")
+    else:
+        out += ["Aucune estimation n'est encore arrivée à échéance.", ""]
+    out += ["Limite : ces estimations sont émises au moment des alertes, donc dans les situations les plus difficiles "
+            "(rivière en mouvement). Les erreurs seront plus fortes que celles du backtest, qui couvre tous les jours.", ""]
+    return "\n".join(out)
 
 
 def fetch_all(now: datetime, flow_period="P22D", rain_period="P4D"):
@@ -862,7 +978,7 @@ def run() -> None:
             cause = f"avec pluie ({r48:.0f} mm en 48 h)" if r48 >= 5 else "sans pluie (barrage, écluse ou pluie en France ?)"
             txt = (f"{station} ({RIVER[station]}) : {c['ref']:.0f} → {c['value']:.0f} m³/s en {rule['window']} h "
                    f"(+{c['pct']:.0f} %), {cause}, détectée {local(c['t'])}.{ADVANCE.get(station, '')}")
-            notes.append((f"Alerte crue – {RIVER[station]}", txt, "ocean", station, c["t"]))
+            notes.append((f"Alerte crue – {RIVER[station]}", txt, "ocean", station, c["t"], "crue"))
             alert_rows.append({"Date": local(c["t"]), "Station": station, "Type": "crue",
                                "Debit": round(c["value"], 1), "Message": txt})
             seen_c, seen_d = mark, ""
@@ -870,7 +986,7 @@ def run() -> None:
             h_pic = (actuel[0] - pic[0]).total_seconds() / 3600
             txt = (f"{station} ({RIVER[station]}) : {actuel[1]:.0f} m³/s, -{(1 - actuel[1] / pic[1]) * 100:.0f} % "
                    f"depuis le pic de {pic[1]:.0f} m³/s (il y a {h_pic:.0f} h).")
-            notes.append((f"Alerte décrue – {RIVER[station]}", txt, "arrow_down", station, actuel[0]))
+            notes.append((f"Alerte décrue – {RIVER[station]}", txt, "arrow_down", station, actuel[0], "décrue"))
             alert_rows.append({"Date": local(actuel[0]), "Station": station, "Type": "décrue",
                                "Debit": round(actuel[1], 1), "Message": txt})
             seen_d = mark
@@ -886,13 +1002,17 @@ def run() -> None:
     append_csv(RELEVES, RELEVES_COLS, releve_rows(new_hours, flows, temp, rain_s, rain_m, states, last_ts))
     state["last_row"] = last_ts.isoformat()
     update_history()
+    try:
+        verify_forecasts()
+    except Exception as e:
+        logger.warning("Vérification des estimations impossible", error=str(e))
     rel = read_csv(RELEVES)
     write_csv(DATA / "releves_10j.csv", RELEVES_COLS, rel[-240:])  # extrait léger pour le guide de pêche
 
     if notes:
         hist = read_history()
-        for titre, txt, tag, st, t_al in notes:
-            send_alert(st, titre, txt, tag, flows, rain_s if BASIN[st] == "S" else rain_m, t_al, hist)
+        for titre, txt, tag, st, t_al, typ in notes:
+            send_alert(st, titre, txt, tag, flows, rain_s if BASIN[st] == "S" else rain_m, t_al, hist, journal=typ)
         append_csv(ALERTES, ALERT_COLS, alert_rows)
     STATE_FILE.write_text(json.dumps(state, indent=1, ensure_ascii=False) + "\n")
     logger.info("Relevé terminé", heure=local(last_ts), nouvelles_heures=len(new_hours), alertes=len(notes),
@@ -959,5 +1079,8 @@ if __name__ == "__main__":
         test(sys.argv[2] if len(sys.argv) > 2 else "Chooz")
     elif mode == "bootstrap":
         bootstrap()
+    elif mode == "bilan":
+        verify_forecasts()
+        print(bilan_text(read_csv(PREVISIONS)))
     else:
         run()

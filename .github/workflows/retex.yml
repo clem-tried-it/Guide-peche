@@ -1,0 +1,47 @@
+name: Guide pêche – retex
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: guide-peche-retex
+  cancel-in-progress: false
+
+jobs:
+  retex:
+    # Dépôt public : seul le propriétaire peut enregistrer un retex
+    if: ${{ startsWith(github.event.issue.title, 'Retex') && github.event.issue.user.login == github.repository_owner }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Enregistrer le retex
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_DATE: ${{ github.event.issue.created_at }}
+        run: python retex.py
+      - name: Enregistrer les données
+        run: |
+          git config user.name "guide-peche-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/retex.csv
+          git commit -m "Retex n° ${{ github.event.issue.number }}"
+          for i in 1 2 3 4 5; do git pull --rebase && git push && exit 0; sleep 5; done
+          exit 1
+      - name: Confirmer et fermer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file retex_reponse.md
+          gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}"

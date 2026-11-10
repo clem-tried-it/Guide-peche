@@ -1,0 +1,89 @@
+name: Retex pêche
+description: Noter une sortie en 30 secondes (les bredouilles comptent autant que les prises)
+title: "Retex "
+body:
+  - type: input
+    id: date
+    attributes:
+      label: Date
+      description: Laisser vide pour aujourd'hui. Sinon 14/11 ou 2026-11-14.
+    validations:
+      required: false
+  - type: input
+    id: heures
+    attributes:
+      label: Heures
+      description: Début et fin, par exemple 7h30-10h30
+    validations:
+      required: true
+  - type: dropdown
+    id: spot
+    attributes:
+      label: Spot
+      options:
+        - Hourpes (Sambre)
+        - Landelies (Sambre)
+        - Marchienne (Sambre)
+        - Autre Sambre
+        - Profondeville (Meuse)
+        - Namur (Meuse)
+        - Autre Meuse
+        - Lacs de l'Eau d'Heure
+    validations:
+      required: true
+  - type: dropdown
+    id: resultat
+    attributes:
+      label: Résultat
+      options:
+        - Bredouille
+        - Touches sans prise
+        - Prises
+    validations:
+      required: true
+  - type: input
+    id: prises
+    attributes:
+      label: Prises
+      description: Espèce et nombre, par exemple sandre 2, perche 5
+  - type: input
+    id: poste
+    attributes:
+      label: Poste
+      description: Bordure, contre-courant, pile de pont, darse, cassure…
+  - type: dropdown
+    id: bordure
+    attributes:
+      label: Poisson en bordure ou zone calme ?
+      options:
+        - Oui
+        - Non
+        - Ne sait pas
+  - type: input
+    id: technique
+    attributes:
+      label: Technique
+      description: Dropshot, linéaire lent, gratter, lame, spintail, cuillère…
+  - type: input
+    id: leurre
+    attributes:
+      label: Leurre et couleur
+  - type: dropdown
+    id: eau
+    attributes:
+      label: Eau
+      options:
+        - Claire
+        - Teintée
+        - Boueuse
+  - type: dropdown
+    id: alerte
+    attributes:
+      label: Sortie décidée par une alerte ?
+      options:
+        - Oui
+        - Non
+  - type: textarea
+    id: remarques
+    attributes:
+      label: Remarques
