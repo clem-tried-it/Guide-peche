@@ -55,6 +55,8 @@ HIST_COLS = ["Date", "Landelies", "Chatelet", "Salzinnes", "Chooz", "Profondevil
 ALERT_COLS = ["Date", "Station", "Type", "Debit", "Message"]
 PREVISIONS = DATA / "previsions.csv"
 VERIFICATION = DATA / "verification.md"
+CONTROLE = DATA / "controle_estimations.md"  # lu par le bulletin pêche : estimation de la veille vs débit mesuré
+QUOTIDIEN = "quotidien"  # type des estimations notées chaque jour (hors alertes)
 PREV_COLS = ["Alerte", "Station", "Type", "Q0", "Horizon", "Date_cible", "Estime", "Bas", "Haut", "Observe", "Erreur_pct"]
 
 
@@ -833,12 +835,79 @@ def verify_forecasts() -> bool:
         write_csv(PREVISIONS, PREV_COLS, rows)
     if changed or not VERIFICATION.exists():
         VERIFICATION.write_text(bilan_text(rows), encoding="utf-8")
+    if changed or not CONTROLE.exists():
+        CONTROLE.write_text(controle_text(rows), encoding="utf-8")
     return changed
+
+
+def daily_forecast(state: dict, flows: dict, rain_s, rain_m, last_ts: datetime) -> bool:
+    """Une fois par jour (après 6 h, heure de Bruxelles) : note l'estimation J+1 à J+14 de chaque station,
+    pour la comparer ensuite au débit réel (contrôle du bulletin et revue mensuelle)."""
+    now = datetime.now(TZ)
+    today = now.strftime("%Y-%m-%d")
+    if state.get(QUOTIDIEN) == today or now.hour < 6:
+        return False
+    hist = read_history()
+    done = 0
+    for st in ("Landelies", "Chooz"):
+        try:
+            fc = rain_forecast(st)
+            if not fc:
+                continue
+            _, _, prev = make_chart(st, flows, rain_s if BASIN[st] == "S" else rain_m, hist, fc, last_ts)
+            if prev.get("est"):
+                log_forecast(st, QUOTIDIEN, last_ts, prev)
+                done += 1
+        except Exception as e:
+            logger.warning("Estimation quotidienne impossible", station=st, error=str(e))
+    if done:
+        state[QUOTIDIEN] = today
+    return bool(done)
+
+
+def _num(v: float) -> str:
+    return (f"{v:.0f}" if v >= 10 else f"{v:.1f}").replace(".", ",")
+
+
+def controle_text(rows: list[dict], jours: int = 30) -> str:
+    """Contrôle court, prêt à recopier dans le bulletin : estimation de la veille contre débit mesuré,
+    puis erreur médiane glissante sur `jours` jours (et ce qu'aurait donné « débit constant »)."""
+    import statistics as st
+    q = [r for r in rows if r["Type"] == QUOTIDIEN and r["Observe"] not in ("", None)]
+    lim = (datetime.now(TZ) - timedelta(days=jours)).strftime("%Y-%m-%d")
+    out = ["# Contrôle des estimations quotidiennes", "",
+           f"Mis à jour le {datetime.now(TZ):%d/%m/%Y %H:%M}. Erreur = débit estimé comparé au débit moyen mesuré "
+           f"le jour visé (journée complète). Fenêtre glissante : {jours} jours.", ""]
+    for station in ("Landelies", "Chooz"):
+        g = [r for r in q if r["Station"] == station]
+        out.append(f"## {RIVER[station]} ({station})")
+        j1 = sorted((r for r in g if int(r["Horizon"]) == 1), key=lambda r: r["Date_cible"])
+        if j1:
+            r = j1[-1]
+            d = datetime.strptime(r["Date_cible"], "%Y-%m-%d")
+            out.append(f"- Le {d:%d/%m} : estimé la veille {_num(float(r['Estime']))} m³/s, mesuré "
+                       f"{_num(float(r['Observe']))} m³/s ({float(r['Erreur_pct']):+.0f} %).")
+        else:
+            out.append("- Pas encore d'estimation arrivée à échéance.")
+        parts = []
+        for h in (1, 3, 7):
+            gh = [r for r in g if int(r["Horizon"]) == h and r["Date_cible"] >= lim]
+            if len(gh) < 5:
+                parts.append(f"J+{h} : pas encore assez de recul ({len(gh)} j)")
+                continue
+            e = st.median(abs(float(r["Erreur_pct"])) for r in gh)
+            c = st.median(abs(float(r["Q0"]) / float(r["Observe"]) - 1) * 100 for r in gh)
+            b = st.median(float(r["Erreur_pct"]) for r in gh)
+            parts.append(f"J+{h} : ±{e:.0f} % (débit constant ±{c:.0f} %, biais {b:+.0f} %, {len(gh)} j)")
+        out.append(f"- Erreur médiane sur {jours} j — " + " · ".join(parts) + ".")
+        out.append("")
+    return "\n".join(out)
 
 
 def bilan_text(rows: list[dict]) -> str:
     """Bilan lisible : erreur médiane par horizon, comparée à « le débit ne bouge pas », et tenue de la fourchette."""
     import statistics as st
+    rows = [r for r in rows if r["Type"] != QUOTIDIEN]
     done = [r for r in rows if r["Observe"] not in ("", None)]
     alertes = sorted({(r["Alerte"], r["Station"], r["Type"]) for r in rows})
     out = ["# Vérification des estimations émises avec les alertes", "",
@@ -1006,6 +1075,10 @@ def run() -> None:
         verify_forecasts()
     except Exception as e:
         logger.warning("Vérification des estimations impossible", error=str(e))
+    try:
+        daily_forecast(state, flows, rain_s, rain_m, last_ts)
+    except Exception as e:
+        logger.warning("Estimation quotidienne non notée", error=str(e))
     rel = read_csv(RELEVES)
     write_csv(DATA / "releves_10j.csv", RELEVES_COLS, rel[-240:])  # extrait léger pour le guide de pêche
 
@@ -1082,5 +1155,6 @@ if __name__ == "__main__":
     elif mode == "bilan":
         verify_forecasts()
         print(bilan_text(read_csv(PREVISIONS)))
+        print(controle_text(read_csv(PREVISIONS)))
     else:
         run()
