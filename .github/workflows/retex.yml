@@ -3,6 +3,11 @@ name: Guide pêche – retex
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Numéro du ticket retex à (re)traiter"
+        required: true
 
 permissions:
   contents: write
@@ -14,8 +19,8 @@ concurrency:
 
 jobs:
   retex:
-    # Dépôt public : seul le propriétaire peut enregistrer un retex
-    if: ${{ startsWith(github.event.issue.title, 'Retex') && github.event.issue.user.login == github.repository_owner }}
+    # Dépôt public : seuls les comptes de Clément peuvent enregistrer un retex (vérifié aussi à l'étape « Lire le ticket »)
+    if: ${{ github.event_name == 'workflow_dispatch' || (startsWith(github.event.issue.title, 'Retex') && contains(fromJSON('["clem-tried-it", "tvmjbktdrg-netizen"]'), github.event.issue.user.login)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,23 +30,34 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Enregistrer le retex
+      - name: Lire le ticket
         env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_DATE: ${{ github.event.issue.created_at }}
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          gh issue view "$N" --repo "${{ github.repository }}" --json number,title,body,createdAt,author > issue.json
+          python - <<'EOF'
+          import json, os
+          i = json.load(open("issue.json"))
+          if i["author"]["login"] not in ("clem-tried-it", "tvmjbktdrg-netizen") or not i["title"].startswith("Retex"):
+              raise SystemExit("Ticket refusé : auteur ou titre non autorisé")
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"ISSUE_NUMBER={i['number']}\nISSUE_DATE={i['createdAt']}\n")
+              f.write("ISSUE_BODY<<FIN_DU_TICKET\n" + i["body"] + "\nFIN_DU_TICKET\n")
+          EOF
+      - name: Enregistrer le retex
         run: python retex.py
       - name: Enregistrer les données
         run: |
           git config user.name "guide-peche-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/retex.csv
-          git commit -m "Retex n° ${{ github.event.issue.number }}"
+          git commit -m "Retex n° $ISSUE_NUMBER"
           for i in 1 2 3 4 5; do git pull --rebase && git push && exit 0; sleep 5; done
           exit 1
       - name: Confirmer et fermer
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file retex_reponse.md
-          gh issue close "${{ github.event.issue.number }}" --repo "${{ github.repository }}"
+          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body-file retex_reponse.md
+          gh issue close "$ISSUE_NUMBER" --repo "${{ github.repository }}"
