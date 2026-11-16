@@ -1,0 +1,32 @@
+name: Test Sedan (ensemble)
+
+on:
+  push:
+    branches: [sedan-test]
+    paths: ["outils/sedan_ensemble_test.py", ".github/workflows/sedan.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Rejeu
+        run: python outils/sedan_ensemble_test.py
+      - name: Enregistrer le résultat
+        if: always()
+        run: |
+          git config user.name "guide-peche-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sedan || true
+          git diff --cached --quiet && exit 0
+          git commit -m "Résultat du test Sedan"
+          git push
