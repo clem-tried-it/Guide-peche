@@ -46,6 +46,7 @@ ADVANCE = {"Chooz": " Arrivée à Profondeville et Namur dans environ 12 h."}
 BASIN = {"Landelies": "S", "Chooz": "M"}
 PAIR = {"Chooz": "Profondeville", "Landelies": None}
 REPLAY_DAYS = 14
+DECRUE_MAX_H = 168  # pas d'alerte décrue plus de 7 jours après le pic
 RECENT_H = 3  # relevé chaque heure : une crue détectée depuis moins de 3 h est nouvelle
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 
@@ -1051,14 +1052,17 @@ def run() -> None:
             alert_rows.append({"Date": local(c["t"]), "Station": station, "Type": "crue",
                                "Debit": round(c["value"], 1), "Message": txt})
             seen_c, seen_d = mark, ""
-        if c and en_decrue and seen_d != mark:
+        # Décrue : seulement si le pic est récent (sinon le glissement de la fenêtre recrée une alerte chaque heure)
+        mark_d = pic[0].isoformat() if pic else ""
+        pic_recent = pic is not None and actuel[0] - pic[0] <= timedelta(hours=DECRUE_MAX_H)
+        if c and en_decrue and pic_recent and seen_d not in (mark, mark_d):
             h_pic = (actuel[0] - pic[0]).total_seconds() / 3600
             txt = (f"{station} ({RIVER[station]}) : {actuel[1]:.0f} m³/s, -{(1 - actuel[1] / pic[1]) * 100:.0f} % "
                    f"depuis le pic de {pic[1]:.0f} m³/s (il y a {h_pic:.0f} h).")
             notes.append((f"Alerte décrue – {RIVER[station]}", txt, "arrow_down", station, actuel[0], "décrue"))
             alert_rows.append({"Date": local(actuel[0]), "Station": station, "Type": "décrue",
                                "Debit": round(actuel[1], 1), "Message": txt})
-            seen_d = mark
+            seen_d = mark_d
         state[f"crue:{station}"] = seen_c
         state[f"decrue:{station}"] = seen_d or ""
 
