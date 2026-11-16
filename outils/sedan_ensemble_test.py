@@ -89,7 +89,7 @@ def archive_PE():
     js = get("https://archive-api.open-meteo.com/v1/archive", {
         "latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
         "daily": "precipitation_sum,et0_fao_evapotranspiration", "timezone": "Europe/Brussels",
-        "start_date": "2020-08-01", "end_date": str((END + pd.Timedelta(days=20)).date())})
+        "start_date": "2020-08-01", "end_date": str(min(END + pd.Timedelta(days=20), pd.Timestamp.today().normalize() - pd.Timedelta(days=2)).date())})
     P = basin_mean_daily(js, "precipitation_sum")
     E = basin_mean_daily(js, "et0_fao_evapotranspiration")
     return P.fillna(0.0), E.interpolate().bfill().ffill()
@@ -103,7 +103,7 @@ def forecast_archive():
         frames, ok = [], True
         a = START - pd.Timedelta(days=2)
         while a <= END + pd.Timedelta(days=8):
-            b = min(a + pd.Timedelta(days=150), END + pd.Timedelta(days=8))
+            b = min(a + pd.Timedelta(days=150), END + pd.Timedelta(days=8), pd.Timestamp.today().normalize())
             try:
                 js = get("https://previous-runs-api.open-meteo.com/v1/forecast", {
                     "latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
