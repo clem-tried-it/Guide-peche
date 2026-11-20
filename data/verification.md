@@ -1,6 +1,6 @@
 # Vérification des estimations émises avec les alertes
 
-Mis à jour le 20/11/2026 00:56. 6 alerte(s) journalisée(s), 18 estimation(s) déjà comparée(s) au débit réel.
+Mis à jour le 21/11/2026 00:59. 6 alerte(s) journalisée(s), 24 estimation(s) déjà comparée(s) au débit réel.
 
 Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.
 
@@ -9,8 +9,8 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 | Horizon | Cas | Erreur médiane modèle | Erreur médiane « débit constant » | Biais médian | Dans la fourchette |
 |---|---|---|---|---|---|
 | J+1 | 6 | 27 % | 49 % | -27 % | 1/6 |
-| J+2 à J+3 | 11 | 25 % | 75 % | -25 % | 6/11 |
-| J+4 à J+7 | 1 | 24 % | 84 % | -24 % | 1/1 |
+| J+2 à J+3 | 12 | 24 % | 74 % | -24 % | 6/12 |
+| J+4 à J+7 | 6 | 9 % | 82 % | -6 % | 4/6 |
 
 ## Détail par alerte
 
@@ -21,6 +21,6 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 | 2026-11-16 02:00 | Chooz | décrue | 26 m³/s | estimé 45, réel 64 (-30 %) | estimé 123, réel 152 (-19 %) | estimé 155, à venir |
 | 2026-11-16 07:00 | Chooz | crue | 38 m³/s | estimé 60, réel 64 (-6 %) | estimé 138, réel 152 (-9 %) | estimé 174, à venir |
 | 2026-11-16 19:00 | Chooz | décrue | 40 m³/s | estimé 66, réel 64 (+3 %) | estimé 129, réel 152 (-15 %) | estimé 141, à venir |
-| 2026-11-17 12:00 | Chooz | crue | 52 m³/s | estimé 84, réel 132 (-36 %) | estimé 128, à venir | estimé 111, à venir |
+| 2026-11-17 12:00 | Chooz | crue | 52 m³/s | estimé 84, réel 132 (-36 %) | estimé 128, réel 150 (-15 %) | estimé 111, à venir |
 
 Limite : ces estimations sont émises au moment des alertes, donc dans les situations les plus difficiles (rivière en mouvement). Les erreurs seront plus fortes que celles du backtest, qui couvre tous les jours.
