@@ -1,6 +1,4 @@
 Date,Landelies,Chatelet,Salzinnes,Chooz,Profondeville,Temp_Namur,Pluie_Sambre,Pluie_Meuse,Etat_Landelies,Etat_Chooz
-2026-11-10 01:00,2.31,2.54,3.02,31.66,34.2,9.6,0.0,0.0,,
-2026-11-10 02:00,2.27,3.72,0.86,31.77,34.18,9.6,0.0,0.0,normal,normal
 2026-11-10 03:00,2.01,2.9,2.23,31.9,34.69,9.6,0.0,0.0,normal,normal
 2026-11-10 04:00,,,,,32.88,,,,normal,normal
 2026-11-10 05:00,,,,,31.99,,,,normal,normal
@@ -239,3 +237,5 @@ Date,Landelies,Chatelet,Salzinnes,Chooz,Profondeville,Temp_Namur,Pluie_Sambre,Pl
 2026-11-20 01:00,,45.7,50.34,139.25,198.46,9.3,0.25,0.64,,
 2026-11-20 02:00,,46.85,23.82,137.41,198.48,9.3,0.09,0.14,normal,crue
 2026-11-20 03:00,,47.43,39.2,136.28,199.25,9.3,0.1,0.07,normal,crue
+2026-11-20 04:00,,47.6,63.82,137.38,200.6,9.3,0.51,0.12,,
+2026-11-20 05:00,,,,,204.27,,0.06,0.04,normal,crue
