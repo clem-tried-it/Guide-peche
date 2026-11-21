@@ -1,6 +1,6 @@
 # Vérification des estimations émises avec les alertes
 
-Mis à jour le 21/11/2026 00:59. 6 alerte(s) journalisée(s), 24 estimation(s) déjà comparée(s) au débit réel.
+Mis à jour le 22/11/2026 00:51. 6 alerte(s) journalisée(s), 30 estimation(s) déjà comparée(s) au débit réel.
 
 Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.
 
@@ -10,7 +10,7 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 |---|---|---|---|---|---|
 | J+1 | 6 | 27 % | 49 % | -27 % | 1/6 |
 | J+2 à J+3 | 12 | 24 % | 74 % | -24 % | 6/12 |
-| J+4 à J+7 | 6 | 9 % | 82 % | -6 % | 4/6 |
+| J+4 à J+7 | 12 | 21 % | 83 % | -21 % | 8/12 |
 
 ## Détail par alerte
 
