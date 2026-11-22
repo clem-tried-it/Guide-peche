@@ -852,13 +852,15 @@ def verify_forecasts() -> bool:
     if not rows:
         return False
     today = datetime.now(TZ).strftime("%Y-%m-%d")
+    recent = (datetime.now(TZ) - timedelta(days=14)).strftime("%Y-%m-%d")
     hist = {r["Date"]: r for r in read_csv(HISTORIQUE)}
     changed = False
     for r in rows:
-        if r["Observe"] or r["Date_cible"] >= today:
+        # Le débit observé des 14 derniers jours est relu : les relevés complétés après coup le corrigent.
+        if r["Date_cible"] >= today or (r["Observe"] and r["Date_cible"] < recent):
             continue
         obs = hist.get(r["Date_cible"], {}).get(r["Station"])
-        if obs in ("", None) or float(obs) <= 0:
+        if obs in ("", None) or float(obs) <= 0 or str(fmt(obs)) == str(r["Observe"]):
             continue
         r["Observe"] = fmt(obs)
         r["Erreur_pct"] = round((float(r["Estime"]) / float(obs) - 1) * 100, 1)
