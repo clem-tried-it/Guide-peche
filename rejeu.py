@@ -174,7 +174,9 @@ def build_catalogue(table: dict) -> list[dict]:
             for n in moves[i + 1:]:
                 if n["t"] - fin_ep <= timedelta(0):
                     fin_ep = n["t"] + timedelta(hours=120)
-            after = [(t, v) for t, v in sm if m["t"] <= t <= fin_ep]
+            # pic mesuré sur les 7 jours qui suivent l'alerte, la même fenêtre que le pic estimé la veille
+            # (sinon une 2e vague, une semaine plus tard, passe pour le pic de la crue : 02/01/2025, 114 → 154 m³/s)
+            after = [(t, v) for t, v in sm if m["t"] <= t <= min(fin_ep, m["t"] + timedelta(days=7))]
             tp, vp = max(after, key=lambda p: p[1])
             crues.append({"Station": st, "Type": "crue", "Date": str(m["t"].astimezone(D.TZ).date()),
                           "Heure_alerte": m["t"].isoformat(), "Ref": round(m["ref"], 1), "Pic": round(vp, 1),
