@@ -42,10 +42,7 @@ Date_rejeu,Station,Type,Date,Heure_alerte,Ref,Pic,Pluie_tombee,Pluie_J3,Pluie_J2
 2026-11-22,Landelies,calme,2025-09-24,,1.6,,11.5,13.0,16.8,20.0,non,non,non,3.2,,Bien vu : pluie annoncée mais pas de montée estimée
 2026-11-22,Landelies,calme,2024-10-17,,16.1,,4.7,7.1,15.1,18.7,non,2024-10-18,2024-10-18,36.8,,Fausse alerte : montée annoncée à J-2 qui n'est pas venue
 2026-11-22,Landelies,calme,2025-10-03,,2.1,,15.1,33.7,15.8,17.8,non,non,non,3.4,,Bien vu : pluie annoncée mais pas de montée estimée
-2026-11-22,Landelies,calme,2026-03-25,,nan,,16.0,11.1,14.0,16.9,donnée manquante,donnée manquante,donnée manquante,,,Bien vu : pluie annoncée mais pas de montée estimée
 2026-11-22,Landelies,calme,2024-08-14,,3.7,,0.1,0.4,10.4,16.5,non,2024-08-15,2024-08-15,7.2,,Fausse alerte : montée annoncée à J-2 qui n'est pas venue
-2026-11-22,Landelies,calme,2026-03-13,,nan,,25.6,12.7,16.5,16.4,donnée manquante,donnée manquante,donnée manquante,,,Bien vu : pluie annoncée mais pas de montée estimée
-2026-11-22,Landelies,calme,2026-02-21,,nan,,21.9,9.6,8.9,14.4,donnée manquante,donnée manquante,donnée manquante,,,Bien vu : pluie annoncée mais pas de montée estimée
 2026-11-22,Landelies,calme,2025-07-31,,3.6,,15.5,14.1,7.2,12.7,non,non,non,3.6,,Bien vu : pluie annoncée mais pas de montée estimée
 2026-11-22,Landelies,calme,2024-09-23,,3.9,,12.9,5.6,8.4,12.3,non,non,2024-09-25,23.5,,Fausse alerte : montée annoncée à J-1 qui n'est pas venue
 2026-11-22,Landelies,calme,2026-11-10,,2.5,,9.2,8.3,5.7,11.2,non,non,non,3.7,,Bien vu : pluie annoncée mais pas de montée estimée
