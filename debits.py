@@ -39,8 +39,12 @@ RAIN_MEUSE_TS = ["252946010", "253132010", "252370010", "250675010", "254541010"
                  "253808010", "250008010", "252268010", "251458010", "251823010", "251424010"]
 RIVER = {"Landelies": "Sambre", "Chooz": "Meuse"}
 DEFAULT_RULES = {
-    "Landelies": {"smooth": 3, "window": 3, "pct": 100.0, "abs": 5.0, "pause": 24, "baisse": 30.0},
-    "Chooz": {"smooth": 1, "window": 6, "pct": 50.0, "abs": 20.0, "pause": 24, "baisse": 30.0},
+    # window2/pct2/abs2 : montée lente sur 24 h (ajoutée le 22/11/2026). La règle courte seule ne voyait que
+    # 5 des 28 crues de la Sambre >= 40 m³/s et 5 des 17 crues de la Meuse >= 300 m³/s (rejeu 2021-2026).
+    "Landelies": {"smooth": 3, "window": 3, "pct": 100.0, "abs": 5.0, "window2": 24, "pct2": 100.0, "abs2": 5.0,
+                  "pause": 24, "baisse": 30.0},
+    "Chooz": {"smooth": 1, "window": 6, "pct": 50.0, "abs": 20.0, "window2": 24, "pct2": 50.0, "abs2": 20.0,
+              "pause": 24, "baisse": 30.0},
 }
 ADVANCE = {"Chooz": " Arrivée à Profondeville et Namur dans environ 12 h."}
 BASIN = {"Landelies": "S", "Chooz": "M"}
@@ -115,19 +119,41 @@ def smooth(points, hours: int):
     return out
 
 
+def fill_gaps(points, max_h: int = 6):
+    """Comble par interpolation linéaire les trous de relevé de `max_h` heures au plus (pas au-delà)."""
+    out = []
+    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+        out.append((t0, v0))
+        n = int((t1 - t0).total_seconds() // 3600)
+        if 1 < n <= max_h + 1:
+            out += [(t0 + timedelta(hours=k), v0 + (v1 - v0) * k / n) for k in range(1, n)]
+    if points:
+        out.append(points[-1])
+    return out
+
+
 def detect_moves(points, rule: dict) -> list[dict]:
-    """Débuts de mouvement : hausse >= pct % ET >= abs m³/s sur la fenêtre, avec pause entre deux épisodes."""
+    """Débuts de mouvement : hausse >= pct % ET >= abs m³/s sur la fenêtre courte (window), ou montée lente
+    >= pct2 % ET >= abs2 m³/s sur la fenêtre longue (window2), avec pause entre deux épisodes."""
     by_t = dict(points)
+    crit = [(rule["window"], rule["pct"], rule["abs"])]
+    if rule.get("window2"):
+        crit.append((rule["window2"], rule.get("pct2", rule["pct"]), rule.get("abs2", rule["abs"])))
     moves, last_trig = [], None
     for t, v in points:
-        ref = by_t.get(t - timedelta(hours=rule["window"]))
-        if ref is None or ref <= 0:
-            continue
-        d = v - ref
-        p = d / ref * 100
-        if p >= rule["pct"] and d >= rule["abs"]:
+        hit = None
+        for win, pct, ab in crit:
+            ref = by_t.get(t - timedelta(hours=win))
+            if ref is None or ref <= 0:
+                continue
+            d = v - ref
+            p = d / ref * 100
+            if p >= pct and d >= ab:
+                hit = {"t": t, "value": v, "ref": ref, "pct": p, "delta": d, "window": win}
+                break
+        if hit:
             if last_trig is None or t - last_trig > timedelta(hours=rule["pause"]):
-                moves.append({"t": t, "value": v, "ref": ref, "pct": p, "delta": d})
+                moves.append(hit)
             last_trig = t
     return moves
 
@@ -382,8 +408,13 @@ def make_chart(station: str, flows: dict, rain_series: list, hist, forecast: dic
             except Exception as e:
                 logger.warning("Modèle GR4J indisponible, modèle statistique seul", error=str(e))
             if len(ens_q) >= 10:
+                # Fourchette centrée sur l'estimation : l'estimation part de la pluie prévue ICON puis ECMWF,
+                # les scénarios de l'ensemble ECMWF seul. Sans recentrage, l'estimation sortait souvent de sa
+                # propre fourchette (19/11/2026 : 96 m³/s estimés, fourchette 22–35).
                 arr = np.array(ens_q)
-                band = (np.percentile(arr, 10, axis=0), np.percentile(arr, 90, axis=0))
+                med = np.percentile(arr, 50, axis=0)
+                c_ = np.array(est_raw[:arr.shape[1]])
+                band = (c_ * np.percentile(arr, 10, axis=0) / med, c_ * np.percentile(arr, 90, axis=0) / med)
         except Exception as e:
             logger.warning("Estimation du débit impossible", error=str(e))
     bold, details, phase = estimation(station, s_full, h_old, forecast, d0, hist, est_raw,
@@ -538,7 +569,7 @@ def phase_of(station: str, s_full, p25=None, p90=None) -> str:
     last72 = s_full[s_full.index >= t_end - timedelta(hours=72)]
     ref3 = s_full[s_full.index <= t_end - timedelta(hours=3)]
     monte = len(ref3) > 0 and cur > 1.03 * float(ref3.iloc[-1])
-    moves = detect_moves(smooth(list(zip(last72.index, last72.values)), rule["smooth"]), rule)
+    moves = detect_moves(smooth(fill_gaps(list(zip(last72.index, last72.values))), rule["smooth"]), rule)
     if moves:
         c = moves[-1]
         apres = last72[last72.index >= c["t"]]
@@ -793,6 +824,8 @@ def send_alert(station: str, titre: str, txt: str, tag: str, flows: dict, rain_s
                 log_forecast(station, journal, alert_t, prev)
             except Exception as e:
                 logger.warning("Estimation non journalisée", error=str(e))
+        if os.environ.get("APERCU"):  # mode test : copie de l'image, publiée dans l'onglet Actions
+            Path(os.environ["APERCU"]).write_bytes(png)
         push_image(titre, txt, tag, png)
     except Exception as e:
         logger.warning("Graphique impossible, envoi du texte seul", error=str(e))
@@ -821,13 +854,15 @@ def verify_forecasts() -> bool:
     if not rows:
         return False
     today = datetime.now(TZ).strftime("%Y-%m-%d")
+    recent = (datetime.now(TZ) - timedelta(days=14)).strftime("%Y-%m-%d")
     hist = {r["Date"]: r for r in read_csv(HISTORIQUE)}
     changed = False
     for r in rows:
-        if r["Observe"] or r["Date_cible"] >= today:
+        # Le débit observé des 14 derniers jours est relu : les relevés complétés après coup le corrigent.
+        if r["Date_cible"] >= today or (r["Observe"] and r["Date_cible"] < recent):
             continue
         obs = hist.get(r["Date_cible"], {}).get(r["Station"])
-        if obs in ("", None) or float(obs) <= 0:
+        if obs in ("", None) or float(obs) <= 0 or str(fmt(obs)) == str(r["Observe"]):
             continue
         r["Observe"] = fmt(obs)
         r["Erreur_pct"] = round((float(r["Estime"]) / float(obs) - 1) * 100, 1)
@@ -977,6 +1012,37 @@ def releve_rows(hours, flows, temp, rain_s, rain_m, states=None, last_ts=None) -
     return rows
 
 
+def backfill_releves(flows, temp, rain_s, rain_m, days: int = 14) -> int:
+    """Complète les cases vides des relevés récents : le SPW publie souvent une valeur avec plusieurs heures
+    de retard, et une ligne écrite sans elle restait vide (22/11/2026 : 54 % des heures de Landelies vides)."""
+    rel = read_csv(RELEVES)
+    if not rel:
+        return 0
+    by_local = {}
+    for n in FLOW_TS:
+        for t, v in flows[n].items():
+            by_local.setdefault(local(t), {})[n] = v
+    for t, v in temp.items():
+        by_local.setdefault(local(t), {})["Temp_Namur"] = v
+    for key, series in (("Pluie_Sambre", rain_s), ("Pluie_Meuse", rain_m)):
+        for t in {tt for d in series for tt in d}:
+            by_local.setdefault(local(t), {})[key] = basin_mean(series, t)
+    lim = local(datetime.now(timezone.utc) - timedelta(days=days))
+    filled = 0
+    for r in rel:
+        if r["Date"] < lim:
+            continue
+        src = by_local.get(r["Date"], {})
+        for k, v in src.items():
+            if r.get(k, "") in ("", None) and v is not None:
+                r[k] = fmt(v)
+                filled += 1
+    if filled:
+        write_csv(RELEVES, RELEVES_COLS, rel)
+        update_history(days=days)
+    return filled
+
+
 def update_history(days: int = 3) -> None:
     """Recalcule les derniers jours de l'historique journalier à partir des relevés horaires."""
     rel = read_csv(RELEVES)
@@ -1025,7 +1091,7 @@ def run() -> None:
 
     states, notes, alert_rows = {}, [], []
     for station, rule in rules.items():
-        pts = smooth(sorted(flows[station].items()), rule["smooth"])
+        pts = smooth(fill_gaps(sorted(flows[station].items())), rule["smooth"])
         moves = detect_moves(pts, rule)
         c = moves[-1] if moves else None
         etat, en_decrue, pic, actuel = "normal", False, None, None
@@ -1046,7 +1112,7 @@ def run() -> None:
         if c and seen_c != mark and last_ts - c["t"] <= timedelta(hours=RECENT_H):
             r48 = rain_48h(rain_s if BASIN[station] == "S" else rain_m, c["t"])
             cause = f"avec pluie ({r48:.0f} mm en 48 h)" if r48 >= 5 else "sans pluie (barrage, écluse ou pluie en France ?)"
-            txt = (f"{station} ({RIVER[station]}) : {c['ref']:.0f} → {c['value']:.0f} m³/s en {rule['window']} h "
+            txt = (f"{station} ({RIVER[station]}) : {c['ref']:.0f} → {c['value']:.0f} m³/s en {c.get('window', rule['window'])} h "
                    f"(+{c['pct']:.0f} %), {cause}, détectée {local(c['t'])}.{ADVANCE.get(station, '')}")
             notes.append((f"Alerte crue – {RIVER[station]}", txt, "ocean", station, c["t"], "crue"))
             alert_rows.append({"Date": local(c["t"]), "Station": station, "Type": "crue",
@@ -1073,6 +1139,7 @@ def run() -> None:
         known = {r["Date"] for r in read_csv(RELEVES)}
         new_hours = [t for t in new_hours if local(t) not in known]
     append_csv(RELEVES, RELEVES_COLS, releve_rows(new_hours, flows, temp, rain_s, rain_m, states, last_ts))
+    backfill_releves(flows, temp, rain_s, rain_m)
     state["last_row"] = last_ts.isoformat()
     update_history()
     try:

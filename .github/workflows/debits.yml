@@ -37,7 +37,15 @@ jobs:
       - name: Relevé
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          APERCU: ${{ inputs.mode == 'test' && 'apercu.png' || '' }}
         run: python debits.py "${{ inputs.mode || 'run' }}" "${{ inputs.station || 'Chooz' }}"
+      - name: Image du test
+        if: ${{ inputs.mode == 'test' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-test
+          path: apercu.png
+          if-no-files-found: warn
       - name: Enregistrer les données
         if: ${{ (inputs.mode || 'run') != 'test' }}
         run: |
