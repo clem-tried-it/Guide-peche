@@ -75,8 +75,7 @@ def fetch_prev_rain(station: str, start: date, end: date) -> dict:
                   "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
                   "start_date": str(start), "end_date": str(end)}
         r = _get(PREVRUN, params)
-        if (end - start).days > 60:
-            time.sleep(15)  # gros téléchargement : rester sous la limite par minute d'Open-Meteo
+        time.sleep(8)  # rester sous la limite par minute d'Open-Meteo
         js = r.json()
         for loc in js if isinstance(js, list) else [js]:
             h = loc["hourly"]
@@ -96,24 +95,38 @@ def fetch_prev_rain(station: str, start: date, end: date) -> dict:
     return out
 
 
-def update_prev_rain() -> dict:
-    """Table {station: {date: [obs, P1..P7]}} tenue à jour dans data/rejeu_pluie_prevue.csv."""
+CHUNK_DAYS = 45          # téléchargement par tranches : Open-Meteo compte le volume demandé
+BUDGET_S = 30 * 60       # au-delà, on enregistre et on reprendra au prochain lancement
+
+
+def _save_prev(table: dict) -> None:
+    rows = [{"Date": str(d), "Station": st, **{c: ("" if v is None else v) for c, v in zip(PREV_COLS[2:], vals)}}
+            for st in STATIONS for d, vals in sorted(table[st].items())]
+    D.write_csv(PREV_CSV, PREV_COLS, rows)
+
+
+def update_prev_rain() -> tuple[dict, bool]:
+    """Table {station: {date: [obs, P1..P7]}} tenue à jour dans data/rejeu_pluie_prevue.csv, téléchargée par
+    tranches et enregistrée après chacune. Renvoie (table, complète jusqu'à hier ?)."""
+    t0 = time.monotonic()
     table = {s: {} for s in STATIONS}
     for r in D.read_csv(PREV_CSV):
         table[r["Station"]][_d(r["Date"])] = [float(r[c]) if r[c] not in ("", None) else None for c in PREV_COLS[2:]]
     hier = date.today() - timedelta(days=1)
-    changed = False
+    complete = True
     for st in STATIONS:
         known = [d for d, v in table[st].items() if None not in v]
         start = max(known) - timedelta(days=3) if known else START - timedelta(days=10)
-        if start <= hier:
-            table[st].update(fetch_prev_rain(st, start, hier))
-            changed = True
-    if changed:
-        rows = [{"Date": str(d), "Station": st, **{c: ("" if v is None else v) for c, v in zip(PREV_COLS[2:], vals)}}
-                for st in STATIONS for d, vals in sorted(table[st].items())]
-        D.write_csv(PREV_CSV, PREV_COLS, rows)
-    return table
+        while start <= hier:
+            if time.monotonic() - t0 > BUDGET_S:
+                complete = False
+                break
+            end = min(start + timedelta(days=CHUNK_DAYS - 1), hier)
+            table[st].update(fetch_prev_rain(st, start, end))
+            _save_prev(table)
+            D.logger.info("Prévisions archivées téléchargées", station=st, jusqu_au=str(end))
+            start = end + timedelta(days=1)
+    return table, complete
 
 
 # ---------- Catalogue des crues et des jours « fausse alerte possible » ----------
@@ -404,7 +417,14 @@ def write_md(today_rows: list[dict], done: list[dict]) -> None:
 
 
 def jour(force_date: str | None = None) -> None:
-    table = update_prev_rain()
+    table, complete = update_prev_rain()
+    if not complete:
+        n = sum(len(v) for v in table.values())
+        total = 2 * (date.today() - START).days
+        OUT_MD.write_text(f"# Rejeu d'une crue – {_fr(date.today())}\n\nPremier téléchargement des prévisions archivées "
+                          f"en cours ({min(100, n * 100 // max(total, 1))} %) : pas de rejeu aujourd'hui.\n", encoding="utf-8")
+        D.logger.info("Prévisions archivées incomplètes, rejeu reporté", pct=n * 100 // max(total, 1))
+        return
     cat = D.read_csv(CATALOGUE)
     if not cat or date.today().day in (1, 15):  # nouvelles crues ajoutées deux fois par mois
         cat = build_catalogue(table)
@@ -433,7 +453,10 @@ def jour(force_date: str | None = None) -> None:
 
 def tout() -> None:
     """Contrôle : rejoue tout le catalogue d'un coup (data/rejeu_tout.csv et .md), sans toucher au rejeu du jour."""
-    table = update_prev_rain()
+    table, complete = update_prev_rain()
+    if not complete:
+        D.logger.info("Prévisions archivées incomplètes : relancer")
+        return
     cat = build_catalogue(table)
     hist = D.read_history()
     out = []
@@ -451,7 +474,9 @@ def tout() -> None:
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "jour"
     if mode == "catalogue":
-        build_catalogue(update_prev_rain())
+        tb, ok = update_prev_rain()
+        if ok:
+            build_catalogue(tb)
     elif mode == "tout":
         tout()
     else:

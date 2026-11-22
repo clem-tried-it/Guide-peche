@@ -21,7 +21,7 @@ concurrency:
 jobs:
   rejeu:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,6 +32,7 @@ jobs:
       - name: Rejeu
         run: python rejeu.py "${{ inputs.mode || 'jour' }}"
       - name: Enregistrer
+        if: always()  # garder aussi un téléchargement partiel
         run: |
           git config user.name "guide-peche-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
