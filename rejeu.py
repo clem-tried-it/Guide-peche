@@ -176,14 +176,31 @@ def build_catalogue(table: dict) -> list[dict]:
 
 # ---------- Rejeu d'un événement ----------
 
+_ARCH: dict = {}
+
+
 def _basin_inputs_archive(station: str, d0):
-    """Remplace debits.basin_inputs pour le passé : pluie et ET0 de l'archive Open-Meteo (pas de prévision)."""
+    """Remplace debits.basin_inputs pour le passé : pluie et ET0 de l'archive Open-Meteo (pas de prévision).
+    Un seul téléchargement par bassin (depuis START − 460 jours), puis découpe."""
+    import pandas as pd
+    if station not in _ARCH:
+        _ARCH[station] = _archive_full(station)
+    df = _ARCH[station]
+    return df[(df.index >= d0 - pd.Timedelta(days=450)) & (df.index <= d0 + pd.Timedelta(days=15))]
+
+
+def _archive_full(station: str):
     import pandas as pd
     pts = D.BASIN_PTS[station]
-    r = httpx.get(ARCHIVE, timeout=120, params={
-        "latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
-        "daily": "precipitation_sum,et0_fao_evapotranspiration", "timezone": "Europe/Brussels",
-        "start_date": str((d0 - pd.Timedelta(days=450)).date()), "end_date": str((d0 + pd.Timedelta(days=15)).date())})
+    params = {"latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
+              "daily": "precipitation_sum,et0_fao_evapotranspiration", "timezone": "Europe/Brussels",
+              "start_date": str(START - timedelta(days=460)), "end_date": str(date.today() - timedelta(days=6))}
+    for essai in range(6):
+        r = httpx.get(ARCHIVE, timeout=180, params=params)
+        if r.status_code != 429:
+            break
+        D.logger.warning("Open-Meteo : trop de requêtes, pause", essai=essai)
+        time.sleep(65)
     r.raise_for_status()
     js = r.json()
     acc: dict = {}
