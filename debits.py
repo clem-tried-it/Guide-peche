@@ -51,6 +51,9 @@ BASIN = {"Landelies": "S", "Chooz": "M"}
 PAIR = {"Chooz": "Profondeville", "Landelies": None}
 REPLAY_DAYS = 14
 DECRUE_MAX_H = 168  # pas d'alerte décrue plus de 7 jours après le pic
+POINT_HEURE = 12  # point quotidien de crue : premier relevé à partir de 12 h (heure de Bruxelles)
+POINT_MAX_H = 240  # suivi pendant 10 jours au plus après le début de la montée
+POINT_RESTE = 0.3  # suivi tant que le débit garde au moins 30 % de la hausse (au-dessus du niveau d'avant crue)
 RECENT_H = 3  # relevé chaque heure : une crue détectée depuis moins de 3 h est nouvelle
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 
@@ -156,6 +159,10 @@ def detect_moves(points, rule: dict) -> list[dict]:
                 moves.append(hit)
             last_trig = t
     return moves
+
+
+def _jh(t: datetime) -> str:
+    return t.astimezone(TZ).strftime("%d/%m à %H h")
 
 
 def local(t: datetime) -> str:
@@ -1131,6 +1138,28 @@ def run() -> None:
             seen_d = mark_d
         state[f"crue:{station}"] = seen_c
         state[f"decrue:{station}"] = seen_d or ""
+        # Point quotidien : tant que la rivière n'est pas revenue près de son niveau d'avant crue, une notification
+        # par jour à partir de POINT_HEURE, pour qui a raté l'alerte du début (demande de Clément, 22/11/2026).
+        now_l = datetime.now(TZ)
+        cle = f"point:{station}"
+        debut = c
+        for m in reversed(moves[:-1]):  # premier mouvement de l'épisode (vagues successives à moins de 5 jours)
+            if debut["t"] - m["t"] <= timedelta(hours=120):
+                debut = m
+            else:
+                break
+        if (c and pic and actuel and now_l.hour >= POINT_HEURE and state.get(cle) != now_l.strftime("%Y-%m-%d")
+                and last_ts - c["t"] <= timedelta(hours=POINT_MAX_H)
+                and actuel[1] - debut["ref"] >= POINT_RESTE * (pic[1] - debut["ref"])
+                and not any(n[3] == station for n in notes)):
+            hpic = max((v for t, v in pts if t >= debut["t"]), default=pic[1])
+            tpic = max(((t, v) for t, v in pts if t >= debut["t"]), key=lambda p: p[1], default=pic)[0]
+            phase = "en décrue" if actuel[1] < hpic * 0.97 else "en montée"
+            txt = (f"{station} ({RIVER[station]}) : {actuel[1]:.0f} m³/s, toujours {phase}. Début de la montée le "
+                   f"{_jh(debut['t'])} à {debut['ref']:.0f} m³/s ; pic de {hpic:.0f} m³/s le {_jh(tpic)}"
+                   f"{' (pour l’instant)' if phase == 'en montée' else ''}.")
+            notes.append((f"Point crue – {RIVER[station]}", txt, "calendar", station, actuel[0], ""))
+            state[cle] = now_l.strftime("%Y-%m-%d")
 
     prev = state.get("last_row")
     prev_t = datetime.fromisoformat(prev) if prev else None
