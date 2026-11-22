@@ -39,18 +39,32 @@ PREVRUN = "https://previous-runs-api.open-meteo.com/v1/forecast"
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
 
+_CLIENT = None
+
+
+def _client() -> httpx.Client:
+    """Client réutilisé, forcé en IPv4 : depuis GitHub Actions, la connexion IPv6 vers Open-Meteo restait bloquée
+    jusqu'au délai (3 min perdues par requête le 22/11/2026)."""
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0", retries=2),
+                               timeout=httpx.Timeout(180, connect=20))
+    return _CLIENT
+
+
 def _get(url: str, params: dict, timeout: int = 180):
-    """GET avec nouveaux essais : coupure réseau, 429 (limite Open-Meteo) ou erreur serveur."""
+    """GET avec nouveaux essais : coupure réseau (pause courte), 429 ou erreur serveur (pause d'une minute)."""
     for essai in range(6):
         try:
-            r = httpx.get(url, params=params, timeout=timeout)
+            r = _client().get(url, params=params, timeout=httpx.Timeout(timeout, connect=20))
             if r.status_code not in (429, 500, 502, 503, 504):
                 r.raise_for_status()
                 return r
             D.logger.warning("Open-Meteo refuse ou sature, pause", status=r.status_code, essai=essai)
+            time.sleep(65)
         except httpx.TransportError as e:
             D.logger.warning("Coupure réseau, nouvel essai", error=str(e), essai=essai)
-        time.sleep(65)
+            time.sleep(5)
     raise RuntimeError(f"{url} ne répond pas")
 
 
@@ -75,7 +89,7 @@ def fetch_prev_rain(station: str, start: date, end: date) -> dict:
                   "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
                   "start_date": str(start), "end_date": str(end)}
         r = _get(PREVRUN, params)
-        time.sleep(8)  # rester sous la limite par minute d'Open-Meteo
+        time.sleep(3)  # rester sous la limite par minute d'Open-Meteo
         js = r.json()
         for loc in js if isinstance(js, list) else [js]:
             h = loc["hourly"]
