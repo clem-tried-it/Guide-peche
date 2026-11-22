@@ -1,0 +1,41 @@
+name: Guide pêche – rejeu d'une crue
+
+on:
+  schedule:
+    - cron: "47 11 * * *"   # chaque jour vers 12 h 47 (13 h 47 en été), avant le bulletin de 14 h 55
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "jour = rejeu du jour, tout = rejouer tout le catalogue (contrôle), catalogue = reconstruire la liste"
+        type: choice
+        options: [jour, tout, catalogue]
+        default: jour
+
+permissions:
+  contents: write
+
+concurrency:
+  group: guide-peche-rejeu
+  cancel-in-progress: false
+
+jobs:
+  rejeu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Rejeu
+        run: python rejeu.py "${{ inputs.mode || 'jour' }}"
+      - name: Enregistrer
+        run: |
+          git config user.name "guide-peche-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rejeu_*
+          if git diff --cached --quiet; then echo "Rien de nouveau"; exit 0; fi
+          git commit -m "Rejeu $(date -u +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do git pull --rebase && git push && break; sleep 10; done
