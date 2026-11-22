@@ -192,6 +192,9 @@ def build_catalogue(table: dict) -> list[dict]:
             nxt = [table[st].get(E + timedelta(days=h)) for h in (1, 2)]
             if E < START or any(v is None or v[h] is None for h, v in zip((1, 2), nxt)) or E > fin.date():
                 continue
+            q = hq.get(str(E))
+            if q is None or q != q:  # débit manquant ce jour-là : pas de rejeu possible
+                continue
             p2 = nxt[0][1] + nxt[1][2]
             if p2 < CALME_PLUIE_MIN or any(E - timedelta(days=5) <= dc <= E + timedelta(days=5) for dc in dates_crue):
                 continue
@@ -360,8 +363,12 @@ def rejeu(ev: dict, table: dict, hist) -> dict:
     else:
         fa = [k for k in (3, 2, 1) if annonces.get(k)]
         res["Avance_h"] = ""
-        res["Verdict"] = (f"Fausse alerte : montée annoncée à J-{max(fa)} qui n'est pas venue" if fa
-                          else "Bien vu : pluie annoncée mais pas de montée estimée")
+        if fa:
+            res["Verdict"] = f"Fausse alerte : montée annoncée à J-{max(fa)} qui n'est pas venue"
+        elif not annonces:  # aucune estimation possible (débit manquant) : ne rien conclure
+            res["Verdict"] = "Donnée manquante : pas d'estimation possible"
+        else:
+            res["Verdict"] = "Bien vu : pluie annoncée mais pas de montée estimée"
     return res
 
 
@@ -408,7 +415,7 @@ def lines_for(r: dict) -> list[str]:
 
 def score(done: list[dict], st: str) -> str:
     cr = [r for r in done if r["Station"] == st and r["Type"] == "crue"]
-    ca = [r for r in done if r["Station"] == st and r["Type"] == "calme"]
+    ca = [r for r in done if r["Station"] == st and r["Type"] == "calme" and not r["Verdict"].startswith("Donnée")]
     prev = [r for r in cr if r["Verdict"].startswith("Prévenu")]
     av = [float(r["Avance_h"]) for r in prev if r["Avance_h"] not in ("", None)]
     fa = [r for r in ca if r["Verdict"].startswith("Fausse")]
