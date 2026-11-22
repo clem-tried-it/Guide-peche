@@ -39,6 +39,21 @@ PREVRUN = "https://previous-runs-api.open-meteo.com/v1/forecast"
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
 
+def _get(url: str, params: dict, timeout: int = 180):
+    """GET avec nouveaux essais : coupure réseau, 429 (limite Open-Meteo) ou erreur serveur."""
+    for essai in range(6):
+        try:
+            r = httpx.get(url, params=params, timeout=timeout)
+            if r.status_code not in (429, 500, 502, 503, 504):
+                r.raise_for_status()
+                return r
+            D.logger.warning("Open-Meteo refuse ou sature, pause", status=r.status_code, essai=essai)
+        except httpx.TransportError as e:
+            D.logger.warning("Coupure réseau, nouvel essai", error=str(e), essai=essai)
+        time.sleep(65)
+    raise RuntimeError(f"{url} ne répond pas")
+
+
 def _d(s: str) -> date:
     return date.fromisoformat(s[:10])
 
@@ -54,32 +69,25 @@ def fetch_prev_rain(station: str, start: date, end: date) -> dict:
     pts = D.BASIN_PTS[station]
     vars_ = ["precipitation"] + [f"precipitation_previous_day{i}" for i in range(1, 8)]
     acc: dict = {}
-    with httpx.Client(timeout=180) as c:
-        for i in range(0, len(pts), 2):
-            grp = pts[i:i + 2]
-            params = {"latitude": ",".join(str(p[0]) for p in grp), "longitude": ",".join(str(p[1]) for p in grp),
-                      "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
-                      "start_date": str(start), "end_date": str(end)}
-            for essai in range(6):
-                r = c.get(PREVRUN, params=params)
-                if r.status_code != 429:
-                    break
-                D.logger.warning("Open-Meteo : trop de requêtes, pause", essai=essai)
-                time.sleep(65)
-            r.raise_for_status()
-            if (end - start).days > 60:
-                time.sleep(15)  # gros téléchargement : rester sous la limite par minute d'Open-Meteo
-            js = r.json()
-            for loc in js if isinstance(js, list) else [js]:
-                h = loc["hourly"]
-                for k, t in enumerate(h["time"]):
-                    day = t[:10]
-                    row = acc.setdefault(day, [[0.0, 0] for _ in vars_])
-                    for j, v in enumerate(vars_):
-                        x = h[v][k]
-                        if x is not None:
-                            row[j][0] += x
-                            row[j][1] += 1
+    for i in range(0, len(pts), 2):
+        grp = pts[i:i + 2]
+        params = {"latitude": ",".join(str(p[0]) for p in grp), "longitude": ",".join(str(p[1]) for p in grp),
+                  "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
+                  "start_date": str(start), "end_date": str(end)}
+        r = _get(PREVRUN, params)
+        if (end - start).days > 60:
+            time.sleep(15)  # gros téléchargement : rester sous la limite par minute d'Open-Meteo
+        js = r.json()
+        for loc in js if isinstance(js, list) else [js]:
+            h = loc["hourly"]
+            for k, t in enumerate(h["time"]):
+                day = t[:10]
+                row = acc.setdefault(day, [[0.0, 0] for _ in vars_])
+                for j, v in enumerate(vars_):
+                    x = h[v][k]
+                    if x is not None:
+                        row[j][0] += x
+                        row[j][1] += 1
     n_pts = len(pts)
     out = {}
     for day, row in acc.items():
@@ -195,13 +203,7 @@ def _archive_full(station: str):
     params = {"latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
               "daily": "precipitation_sum,et0_fao_evapotranspiration", "timezone": "Europe/Brussels",
               "start_date": str(START - timedelta(days=460)), "end_date": str(date.today() - timedelta(days=6))}
-    for essai in range(6):
-        r = httpx.get(ARCHIVE, timeout=180, params=params)
-        if r.status_code != 429:
-            break
-        D.logger.warning("Open-Meteo : trop de requêtes, pause", essai=essai)
-        time.sleep(65)
-    r.raise_for_status()
+    r = _get(ARCHIVE, params)
     js = r.json()
     acc: dict = {}
     for loc in js if isinstance(js, list) else [js]:
