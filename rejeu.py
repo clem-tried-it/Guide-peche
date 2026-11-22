@@ -13,6 +13,7 @@ Usage : python rejeu.py [jour|catalogue] [AAAA-MM-JJ]
 """
 import csv
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from statistics import median
 
@@ -56,11 +57,18 @@ def fetch_prev_rain(station: str, start: date, end: date) -> dict:
     with httpx.Client(timeout=180) as c:
         for i in range(0, len(pts), 2):
             grp = pts[i:i + 2]
-            r = c.get(PREVRUN, params={
-                "latitude": ",".join(str(p[0]) for p in grp), "longitude": ",".join(str(p[1]) for p in grp),
-                "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
-                "start_date": str(start), "end_date": str(end)})
+            params = {"latitude": ",".join(str(p[0]) for p in grp), "longitude": ",".join(str(p[1]) for p in grp),
+                      "hourly": ",".join(vars_), "models": "ecmwf_ifs025", "timezone": "Europe/Brussels",
+                      "start_date": str(start), "end_date": str(end)}
+            for essai in range(6):
+                r = c.get(PREVRUN, params=params)
+                if r.status_code != 429:
+                    break
+                D.logger.warning("Open-Meteo : trop de requêtes, pause", essai=essai)
+                time.sleep(65)
             r.raise_for_status()
+            if (end - start).days > 60:
+                time.sleep(15)  # gros téléchargement : rester sous la limite par minute d'Open-Meteo
             js = r.json()
             for loc in js if isinstance(js, list) else [js]:
                 h = loc["hourly"]
