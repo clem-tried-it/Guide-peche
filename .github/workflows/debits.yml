@@ -46,6 +46,11 @@ jobs:
           name: image-test
           path: apercu.png
           if-no-files-found: warn
+      - name: TEMP apercu
+        if: ${{ inputs.mode == 'test' }}
+        run: |
+          git config user.name "guide-peche-bot"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f apercu.png && git commit -m "TEMP apercu" && git push
       - name: Enregistrer les données
         if: ${{ (inputs.mode || 'run') != 'test' }}
         run: |
