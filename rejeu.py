@@ -128,10 +128,18 @@ def build_catalogue(table: dict) -> list[dict]:
         moves = D.detect_moves(sm, rule)
         fin = now - timedelta(days=5)  # crue trop récente : pic pas encore connu
         crues = []
-        for m in moves:
+        for i, m in enumerate(moves):
             if m["t"].date() < START + timedelta(days=4) or m["t"] > fin:
                 continue
-            after = [(t, v) for t, v in sm if m["t"] <= t <= m["t"] + timedelta(hours=120)]
+            # seulement le début d'un épisode : une vague qui suit une autre de moins de 5 jours n'est pas
+            # une crue « à prévoir », la rivière monte déjà (même règle que le point quotidien)
+            if i and m["t"] - moves[i - 1]["t"] <= timedelta(hours=120):
+                continue
+            fin_ep = m["t"] + timedelta(hours=120)
+            for n in moves[i + 1:]:
+                if n["t"] - fin_ep <= timedelta(0):
+                    fin_ep = n["t"] + timedelta(hours=120)
+            after = [(t, v) for t, v in sm if m["t"] <= t <= fin_ep]
             tp, vp = max(after, key=lambda p: p[1])
             crues.append({"Station": st, "Type": "crue", "Date": str(m["t"].astimezone(D.TZ).date()),
                           "Heure_alerte": m["t"].isoformat(), "Ref": round(m["ref"], 1), "Pic": round(vp, 1),
@@ -148,7 +156,7 @@ def build_catalogue(table: dict) -> list[dict]:
             if E < START or any(v is None or v[h] is None for h, v in zip((1, 2), nxt)) or E > fin.date():
                 continue
             p2 = nxt[0][1] + nxt[1][2]
-            if p2 < CALME_PLUIE_MIN or any(E <= dc <= E + timedelta(days=5) for dc in dates_crue):
+            if p2 < CALME_PLUIE_MIN or any(E - timedelta(days=5) <= dc <= E + timedelta(days=5) for dc in dates_crue):
                 continue
             calmes.append({"Station": st, "Type": "calme", "Date": str(E + timedelta(days=1)), "Heure_alerte": "",
                            "Ref": round(float(hq.get(str(E), float("nan"))), 1), "Pic": "",
@@ -232,16 +240,13 @@ def estimate_at(station: str, E: date, table: dict, hist):
         return raw, fc
 
 
-def first_rise(station: str, q0: float, est: list[float], horizon: int = 4):
-    """Premier jour (1 … horizon) où l'estimation annonce un début de montée : même critère que l'image
-    d'alerte (hausse > 10 % et d'au moins le quart du seuil absolu d'alerte)."""
+def rises(station: str, q0: float, est: list[float], horizon: int = 4) -> list[int]:
+    """Jours (1 … horizon) où l'estimation annonce une montée : même critère que l'image d'alerte
+    (hausse > 10 % et d'au moins le quart du seuil absolu d'alerte)."""
     min_d = D.DEFAULT_RULES[station]["abs"] / 2
     seq = [q0] + list(est)
-    for i in range(1, min(horizon, len(est)) + 1):
-        d = seq[i] - seq[i - 1]
-        if seq[i - 1] and d / seq[i - 1] > 0.1 and d >= min_d / 2:
-            return i
-    return None
+    return [i for i in range(1, min(horizon, len(est)) + 1)
+            if seq[i - 1] and (seq[i] - seq[i - 1]) / seq[i - 1] > 0.1 and seq[i] - seq[i - 1] >= min_d / 2]
 
 
 def rejeu(ev: dict, table: dict, hist) -> dict:
@@ -276,12 +281,12 @@ def rejeu(ev: dict, table: dict, hist) -> dict:
             continue
         est, _ = out
         q0 = float(hist[st].get(pd.Timestamp(E)))
-        h = first_rise(st, q0, est, horizon=4 if ev["Type"] == "crue" else 3)
         if ev["Type"] == "crue":
-            ok_ann = h is not None and E + timedelta(days=h) <= Dv + timedelta(days=1)
+            # montée annoncée autour de l'alerte réelle (la veille, le jour même ou le lendemain)
+            hs = [h for h in rises(st, q0, est, horizon=k + 1) if abs((E + timedelta(days=h) - Dv).days) <= 1]
         else:
-            ok_ann = h is not None
-        annonces[k] = E + timedelta(days=h) if ok_ann else None
+            hs = rises(st, q0, est, horizon=3)
+        annonces[k] = E + timedelta(days=hs[0]) if hs else None
         res[f"Annonce_J{k}"] = str(annonces[k]) if annonces[k] else "non"
         if k == 1:
             res["Pic_estime_J1"] = round(max([q0] + est[:7]), 1)
@@ -347,7 +352,8 @@ def lines_for(r: dict) -> list[str]:
         tete = f"**{riv} – jour de pluie annoncée sans crue, {_fr(_d(r['Date']))}**"
         pic = ""
     return [tete,
-            f"Pluie sur la période : prévue {pj_txt} ; tombée {float(r['Pluie_tombee']):.0f} mm.",
+            f"Pluie {'des 3 jours avant l’alerte' if r['Type'] == 'crue' else 'des 2 jours visés'} : attendue {pj_txt} ; "
+            f"tombée {float(r['Pluie_tombee']):.0f} mm.",
             f"Montée annoncée : {ann}.{pic}",
             f"Verdict : {r['Verdict']}."]
 
