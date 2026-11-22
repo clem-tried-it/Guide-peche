@@ -824,6 +824,8 @@ def send_alert(station: str, titre: str, txt: str, tag: str, flows: dict, rain_s
                 log_forecast(station, journal, alert_t, prev)
             except Exception as e:
                 logger.warning("Estimation non journalisée", error=str(e))
+        if os.environ.get("APERCU"):  # mode test : copie de l'image, publiée dans l'onglet Actions
+            Path(os.environ["APERCU"]).write_bytes(png)
         push_image(titre, txt, tag, png)
     except Exception as e:
         logger.warning("Graphique impossible, envoi du texte seul", error=str(e))
