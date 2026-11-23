@@ -1,11 +1,11 @@
 # Contrôle des estimations quotidiennes
 
-Mis à jour le 23/11/2026 09:46. Erreur = débit estimé comparé au débit moyen mesuré le jour visé (journée complète). Fenêtre glissante : 30 jours.
+Mis à jour le 24/11/2026 00:06. Erreur = débit estimé comparé au débit moyen mesuré le jour visé (journée complète). Fenêtre glissante : 30 jours.
 
 ## Sambre (Landelies)
-- Le 22/11 : estimé la veille 62 m³/s, mesuré 48 m³/s (+29 %).
-- Erreur médiane sur 30 j — J+1 : ±29 % (débit constant ±53 %, biais -10 %, 7 j) · J+3 : ±44 % (débit constant ±89 %, biais -44 %, 5 j) · J+7 : pas encore assez de recul (1 j).
+- Le 23/11 : estimé la veille 38 m³/s, mesuré 35 m³/s (+9 %).
+- Erreur médiane sur 30 j — J+1 : ±20 % (débit constant ±56 %, biais -6 %, 8 j) · J+3 : ±40 % (débit constant ±83 %, biais -40 %, 6 j) · J+7 : pas encore assez de recul (2 j).
 
 ## Meuse (Chooz)
-- Le 22/11 : estimé la veille 219 m³/s, mesuré 191 m³/s (+15 %).
-- Erreur médiane sur 30 j — J+1 : ±20 % (débit constant ±37 %, biais -20 %, 7 j) · J+3 : ±17 % (débit constant ±73 %, biais -17 %, 5 j) · J+7 : pas encore assez de recul (1 j).
+- Le 23/11 : estimé la veille 182 m³/s, mesuré 141 m³/s (+29 %).
+- Erreur médiane sur 30 j — J+1 : ±20 % (débit constant ±39 %, biais -15 %, 8 j) · J+3 : ±16 % (débit constant ±60 %, biais -16 %, 6 j) · J+7 : pas encore assez de recul (2 j).
