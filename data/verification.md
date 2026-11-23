@@ -1,6 +1,6 @@
 # Vérification des estimations émises avec les alertes
 
-Mis à jour le 23/11/2026 02:30. 7 alerte(s) journalisée(s), 36 estimation(s) déjà comparée(s) au débit réel.
+Mis à jour le 23/11/2026 09:46. 8 alerte(s) journalisée(s), 36 estimation(s) déjà comparée(s) au débit réel.
 
 Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.
 
@@ -23,5 +23,6 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 | 2026-11-16 19:00 | Chooz | décrue | 40 m³/s | estimé 66, réel 67 (-2 %) | estimé 129, réel 150 (-14 %) | estimé 141, à venir |
 | 2026-11-17 12:00 | Chooz | crue | 52 m³/s | estimé 84, réel 131 (-36 %) | estimé 128, réel 161 (-21 %) | estimé 111, à venir |
 | 2026-11-22 18:00 | Landelies | décrue | 50 m³/s | estimé 35, à venir | estimé 22, à venir | estimé 13, à venir |
+| 2026-11-23 05:00 | Chooz | décrue | 168 m³/s | estimé 154, à venir | estimé 145, à venir | estimé 132, à venir |
 
 Limite : ces estimations sont émises au moment des alertes, donc dans les situations les plus difficiles (rivière en mouvement). Les erreurs seront plus fortes que celles du backtest, qui couvre tous les jours.
