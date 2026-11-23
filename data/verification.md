@@ -1,6 +1,6 @@
 # Vérification des estimations émises avec les alertes
 
-Mis à jour le 23/11/2026 00:54. 7 alerte(s) journalisée(s), 36 estimation(s) déjà comparée(s) au débit réel.
+Mis à jour le 23/11/2026 02:30. 7 alerte(s) journalisée(s), 36 estimation(s) déjà comparée(s) au débit réel.
 
 Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.
 
