@@ -7,3 +7,5 @@ Date_rejeu,Station,Type,Date,Heure_alerte,Ref,Pic,Pluie_tombee,Pluie_J3,Pluie_J2
 2026-11-25,Chooz,crue,2026-02-11,2026-02-11T13:00:00+00:00,160.8,597.7,26.1,19.4,27.2,27.2,2026-02-11,2026-02-11,2026-02-11,463.3,66,Prévenu ~66 h avant l'alerte (dès J-3)
 2026-11-26,Landelies,crue,2026-11-17,2026-11-17T13:00:00+00:00,4.6,102.1,38.2,36.2,36.0,45.8,2026-11-17,2026-11-17,2026-11-17,23.9,66,Prévenu ~66 h avant l'alerte (dès J-3)
 2026-11-26,Chooz,crue,2024-12-06,2024-12-06T10:00:00+00:00,160.1,426.4,18.1,18.0,16.6,18.0,2024-12-06,2024-12-06,2024-12-06,306.2,63,Prévenu ~63 h avant l'alerte (dès J-3)
+2026-11-27,Landelies,calme,2025-06-05,,3.1,,16.1,32.3,17.9,25.6,non,non,2025-06-06,9.3,,Fausse alerte : montée annoncée à J-1 qui n'est pas venue
+2026-11-27,Chooz,calme,2024-06-29,,95.6,,35.9,31.1,29.6,24.3,non,2024-06-30,2024-06-30,126.0,,Fausse alerte : montée annoncée à J-2 qui n'est pas venue
