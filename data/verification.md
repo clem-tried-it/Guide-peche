@@ -1,6 +1,6 @@
 # Vérification des estimations émises avec les alertes
 
-Mis à jour le 27/11/2026 00:11. 8 alerte(s) journalisée(s), 67 estimation(s) déjà comparée(s) au débit réel.
+Mis à jour le 28/11/2026 00:10. 8 alerte(s) journalisée(s), 75 estimation(s) déjà comparée(s) au débit réel.
 
 Erreur = écart entre le débit estimé et le débit moyen observé le jour visé. « Débit constant » = ce qu'aurait donné l'hypothèse « le débit ne bouge pas ». Le modèle n'est utile que s'il fait mieux.
 
@@ -10,8 +10,8 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 |---|---|---|---|---|---|
 | J+1 | 7 | 33 % | 59 % | -21 % | 2/6 |
 | J+2 à J+3 | 14 | 26 % | 77 % | -23 % | 7/12 |
-| J+4 à J+7 | 24 | 18 % | 82 % | -16 % | 14/24 |
-| J+8 à J+14 | 18 | 45 % | 64 % | +45 % | 5/18 |
+| J+4 à J+7 | 25 | 19 % | 82 % | -16 % | 14/24 |
+| J+8 à J+14 | 24 | 53 % | 61 % | +53 % | 5/24 |
 
 ## Sambre (Landelies)
 
@@ -19,7 +19,7 @@ Erreur = écart entre le débit estimé et le débit moyen observé le jour vis�
 |---|---|---|---|---|---|
 | J+1 | 1 | 1 % | 42 % | -1 % | 0/1 |
 | J+2 à J+3 | 2 | 57 % | 231 % | +57 % | 0/2 |
-| J+4 à J+7 | 1 | 118 % | 497 % | +118 % | 0/1 |
+| J+4 à J+7 | 2 | 110 % | 522 % | +110 % | 0/2 |
 
 ## Détail par alerte
 
